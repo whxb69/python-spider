@@ -27,4 +27,4 @@ for i in range(10):
             print(title + ' saved')
             f.close()
 
-print('congratulations! all finished!')
+print('all finished!')
