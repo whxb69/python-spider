@@ -13,7 +13,7 @@ import base64
 from sqlite3 import IntegrityError
 
 def spider():
-    conn = sqlite3.connect(r'D:/anby/Flask/database/blog-1.db')
+    conn = sqlite3.connect(r'books.db') #数据库路径
     for i in range(0,55):
         num = i * 20
         url = r'https://book.douban.com/tag/%E7%BC%96%E7%A8%8B?start=' + str(num) + '&type=T'
@@ -43,6 +43,7 @@ def spider():
             cover = h.find_all('a',attrs = {"class":"nbg"})[0].attrs['href']
 
             buy = []
+            #当前书目是否存在购买链接
             try:
                 buys = h.find_all('ul', attrs={"class": "more-after"}) #购买列表
                 ifbuys = 1
@@ -123,13 +124,14 @@ def spider():
             c = conn.cursor()
             sql = "select * from books"
             id = len(c.execute(sql).fetchall()) +1
-            no = isbn[-7:]
-
+            itemno = isbn[-7:]
+            
+            #id 标题 简介 isbn 封面 商品编号 类别标签 附编号 推荐列表 其他全部信息 购买链接
             sql = "INSERT INTO books ('id','title','intro','isbn','cover','itemno','tags','subno','recnos','infos','buy') \
-                VALUES ('%d','%s', '%s', '%s', '%s', '%s','%s','%s','%s','%s','%s' );" %(id,title.replace('\'','’'),intro.replace('\'','’'),isbn,cover,no,tag.replace('\'','’'),subno,recnos,allinfo,buy)
+                VALUES ('%d','%s', '%s', '%s', '%s', '%s','%s','%s','%s','%s','%s' );" %(id,title.replace('\'','’'),intro.replace('\'','’'),isbn,cover,itmeno,tag.replace('\'','’'),subno,recnos,allinfo,buy)
             try:
                 c.execute(sql)
-            except IntegrityError as e:
+            except IntegrityError as e:#itemno重复 异常处理
                 if e == 'UNIQUE constraint failed: books.itemno':
                     itemno = str(int(itemno) + 1)
                     c.execute(sql)
@@ -155,7 +157,10 @@ def getproxy():
     if proxy == 'Failed to get proxies':
         return getproxy()
     return proxy
-
+'''
+避免爬取中未知错误导致的中断
+非逻辑性错误进行10次重复请求
+'''
 def req(url,num=0):
     proxies = getproxy()
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:23.0) Gecko/20100101 Firefox/23.0'}
