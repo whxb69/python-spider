@@ -136,4 +136,4 @@ def req(url,num=0):
     return res
 
 if __name__ == '__main__':
-    spider()
+    spider() 
