@@ -36,7 +36,7 @@ def spider():
             booklink = h.find_all('a', attrs={"class": 'title-text'})
             if len(booklink) > 0:
                 rlink = r'https://www.amazon.cn/' + booklink[0].attrs['href']
-            else:
+            else: 
                 continue
             r = req(rlink)
             h = BeautifulSoup(r.text)
