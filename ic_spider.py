@@ -20,7 +20,7 @@ except:
 conn = sqlite3.connect(r'data.db')
 
 
-def main(url,cookie, key, refresh=False):
+def main(url, cookie, key, refresh=False):
     '''
 
     :param url: 目标url
@@ -34,15 +34,15 @@ def main(url,cookie, key, refresh=False):
     cookie = cookie
     html = req(url, cookie).text
     soup = BeautifulSoup(html)
-    count = soup.find('span',attrs={"class":'orangenumber'}).text
-    pages = int(count)/50
-    if str(pages)[:-2] == '.0':
+    count = soup.find('span', attrs={"class": 'orangenumber'}).text
+    pages = int(count) / 50
+    if str(pages)[-2:] == '.0':
         pages = int(pages)
     else:
         pages = int(pages) + 1
-    print('共%d页数据 正在爬取。。。'%pages)
+    print('共%d页数据 正在爬取。。。' % pages)
 
-    for i in range(1, pages+1):
+    for i in range(1, pages + 1):
         if i == 1:
             url = baseurl
         else:
@@ -51,7 +51,18 @@ def main(url,cookie, key, refresh=False):
             html = req(url, cookie).text
             soup = BeautifulSoup(html)
         rlist = soup.find('ul', attrs={'id': "resultList"})
-        lis = rlist.find_all('li', attrs={'class': "stair_tr"})
+        lis = rlist.find_all('li')[1:]
+
+        # 筛选li列表
+        for li in lis[:]:
+            save = False
+            for cls in li.attrs['class']:
+                if cls in ['stair_tr', 'result_son']:
+                    save = True
+                    break
+            if not save:
+                lis.remove(li)
+
         res = {}
         for index, li in enumerate(lis[1:]):
             cates = ['supply', 'id', 'factory', 'batchNumber',
@@ -71,6 +82,19 @@ def main(url,cookie, key, refresh=False):
                                 res[str(index)][cate] = div.text.strip()
                     else:
                         res[str(index)][cate] = ''
+                        # 子项数据继承主项信息
+                        if 'result_son' in li.attrs['class'] and cate == 'supply':
+                            supply = res[str(index - 1)][cate]
+                            if supply[-2] == '-':
+                                snum = int(supply[-1]) + 1
+                                res[str(index)][cate] = supply[:-2] + '-' + str(snum)
+
+                            elif supply[-3] == '-':
+                                snum = int(supply[-2:]) + 1
+                                res[str(index)][cate] = supply[:-3] + '-' + str(snum)
+                            else:
+                                snum = 1
+                                res[str(index)][cate] = supply + '-' + str(snum)
                     if cate == 'supply':  # 获取悬浮名片内容
                         card = div.find('div', attrs={'class': "detailLayer"})
                         if card:
@@ -85,6 +109,10 @@ def main(url,cookie, key, refresh=False):
                                     c_cate) + 1:].strip().replace('\n', '\t')
                                 info_data = re.sub('(\xa0)+', '\t', info_data)
                                 res[str(index)]['card'][c_cate] = info_data
+                        else:
+                            # 子项数据继承主项信息
+                            if 'result_son' in li.attrs['class']:
+                                res[str(index)]['card'] = res[str(index - 1)]['card']
 
                 else:  # 获取联系方式 qq号
                     qqs = li.find(
@@ -95,13 +123,14 @@ def main(url,cookie, key, refresh=False):
                     res[str(index)][cate] = r
         # print(1)
         if refresh:
-            refreshdb(res,key)
+            refreshdb(res, key)
         else:
-            setdb(res,key)
+            setdb(res, key)
 
     return pages
 
-def setdb(rdict,key):
+
+def setdb(rdict, key):
     for item in rdict:
         c = conn.cursor()
         sql = "select * from icnet"
@@ -112,13 +141,15 @@ def setdb(rdict,key):
               % (nid, rdict[item]['supply'], rdict[item]['id'], rdict[item]['factory'], rdict[item]['card']['企业档案'],
                  rdict[item]['card']['手机'], rdict[item]['askPrice'], rdict[item]['card']['地址'],
                  rdict[item]['card']['电话'], rdict[item]['batchNumber'], rdict[item]['totalNumber'],
-                 rdict[item]['pakaging'], rdict[item]['prompt'], rdict[item]['date'].replace('-','/'), rdict[item]['card']['传真'],
+                 rdict[item]['pakaging'], rdict[item]['prompt'], rdict[item]['date'].replace('-', '/'),
+                 rdict[item]['card']['传真'],
                  rdict[item]['card']['办公地点'], str(key))
         c.execute(sql)
         conn.commit()
         print(rdict[item]['supply'] + '   成功')
 
-def refreshdb(rdict,key):
+
+def refreshdb(rdict, key):
     for item in rdict:
         c = conn.cursor()
         sql = 'SELECT * FROM icnet WHERE 供货商="%s"' % rdict[item]['supply']
@@ -130,37 +161,38 @@ def refreshdb(rdict,key):
         datas = (nid, rdict[item]['supply'], rdict[item]['id'], rdict[item]['factory'], rdict[item]['card']['企业档案'],
                  rdict[item]['card']['手机'], rdict[item]['askPrice'], rdict[item]['card']['地址'],
                  rdict[item]['card']['电话'], rdict[item]['batchNumber'], rdict[item]['totalNumber'],
-                 rdict[item]['pakaging'], rdict[item]['prompt'], rdict[item]['date'].replace('-','/'), rdict[item]['card']['传真'],
+                 rdict[item]['pakaging'], rdict[item]['prompt'], rdict[item]['date'].replace('-', '/'),
+                 rdict[item]['card']['传真'],
                  rdict[item]['card']['办公地点'], str(key))
-        items = ('id', '供货商', '型号', '厂家', '企业档案',\
-                                 '手机', '询价QQ', '地址', '电话', '批号', '数量', '封装', '说明/库位', '日期',\
-                                 '传真', '办公地点','key_word')
+        items = ('id', '供货商', '型号', '厂家', '企业档案', \
+                 '手机', '询价QQ', '地址', '电话', '批号', '数量', '封装', '说明/库位', '日期', \
+                 '传真', '办公地点', 'key_word')
 
-        #依据供货商判断是否有相同条目
+        # 依据供货商判断是否有相同条目
         if num == 0:
 
             sql = "INSERT INTO icnet('id', '供货商', '型号', '厂家', '企业档案',\
                                  '手机', '询价QQ', '地址', '电话', '批号', '数量', '封装', '说明/库位', '日期',\
                                  '传真', '办公地点','key_word') VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s','%s')" \
-              % datas
+                  % datas
             c.execute(sql)
             conn.commit()
             print('新增 %s' % rdict[item]['supply'])
 
         elif num == 1:
-            nid = res[0][0]  #待更新项对应id
-            #按供货商查询 遍历各项数据 有不同则更新
-            for index,(new,old) in enumerate(zip(datas,res[0])):
-                if old != new and index!=0:
+            nid = res[0][0]  # 待更新项对应id
+            # 按供货商查询 遍历各项数据 有不同则更新
+            for index, (new, old) in enumerate(zip(datas, res[0])):
+                if old != new and index != 0:
                     item = items[index]
                     try:
-                        sql = "UPDATE icnet SET '%s' = '%s' WHERE id = %d" % (item,new,nid)
+                        sql = "UPDATE icnet SET '%s' = '%s' WHERE id = %d" % (item, new, nid)
                         c.execute(sql)
                     except:
                         sql = "UPDATE icnet SET '%s' = '%s' WHERE id = %d" % (item, new, nid)
                         c.execute(sql)
                     conn.commit()
-                    print('更新 %s : %s %s -> %s' % (res[0][1],item,old,new))
+                    print('更新 %s : %s %s -> %s' % (res[0][1], item, old, new))
         else:
             pass
 
