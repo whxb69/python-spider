@@ -20,12 +20,26 @@ except:
 conn = sqlite3.connect(r'data.db')
 
 
-def main(url,cookie, pages, key, refresh=False):
+def main(url,cookie, key, refresh=False):
+    '''
+
+    :param url: 目标url
+    :param cookie: 页面cookie
+    :param pages: 总页数
+    :param key: 型号对应key
+    :param refresh: 是否更新模式
+    :return:
+    '''
     baseurl = url
     cookie = cookie
     html = req(url, cookie).text
     soup = BeautifulSoup(html)
-    # pages = len(soup.find('div',attrs={'class':"pagepicker"}).find_all('li'))
+    count = soup.find('span',attrs={"class":'orangenumber'}).text
+    pages = int(count)/50
+    if str(pages)[:-2] == '.0':
+        pages = int(pages)
+    else:
+        pages = int(pages) + 1
     print('共%d页数据 正在爬取。。。'%pages)
 
     for i in range(1, pages+1):
@@ -85,7 +99,7 @@ def main(url,cookie, pages, key, refresh=False):
         else:
             setdb(res,key)
 
-
+    return pages
 
 def setdb(rdict,key):
     for item in rdict:
@@ -98,7 +112,7 @@ def setdb(rdict,key):
               % (nid, rdict[item]['supply'], rdict[item]['id'], rdict[item]['factory'], rdict[item]['card']['企业档案'],
                  rdict[item]['card']['手机'], rdict[item]['askPrice'], rdict[item]['card']['地址'],
                  rdict[item]['card']['电话'], rdict[item]['batchNumber'], rdict[item]['totalNumber'],
-                 rdict[item]['pakaging'], rdict[item]['prompt'], rdict[item]['date'], rdict[item]['card']['传真'],
+                 rdict[item]['pakaging'], rdict[item]['prompt'], rdict[item]['date'].replace('-','/'), rdict[item]['card']['传真'],
                  rdict[item]['card']['办公地点'], str(key))
         c.execute(sql)
         conn.commit()
@@ -110,17 +124,19 @@ def refreshdb(rdict,key):
         sql = 'SELECT * FROM icnet WHERE 供货商="%s"' % rdict[item]['supply']
         res = c.execute(sql).fetchall()
         num = len(res)
-        sql = 'SELECT * FROM icnet WHERE key_word="%s"' % key
+        sql = 'SELECT * FROM icnet'
         nid = len(c.execute(sql).fetchall()) + 1
 
         datas = (nid, rdict[item]['supply'], rdict[item]['id'], rdict[item]['factory'], rdict[item]['card']['企业档案'],
                  rdict[item]['card']['手机'], rdict[item]['askPrice'], rdict[item]['card']['地址'],
                  rdict[item]['card']['电话'], rdict[item]['batchNumber'], rdict[item]['totalNumber'],
-                 rdict[item]['pakaging'], rdict[item]['prompt'], rdict[item]['date'], rdict[item]['card']['传真'],
+                 rdict[item]['pakaging'], rdict[item]['prompt'], rdict[item]['date'].replace('-','/'), rdict[item]['card']['传真'],
                  rdict[item]['card']['办公地点'], str(key))
         items = ('id', '供货商', '型号', '厂家', '企业档案',\
                                  '手机', '询价QQ', '地址', '电话', '批号', '数量', '封装', '说明/库位', '日期',\
                                  '传真', '办公地点','key_word')
+
+        #依据供货商判断是否有相同条目
         if num == 0:
 
             sql = "INSERT INTO icnet('id', '供货商', '型号', '厂家', '企业档案',\
@@ -130,15 +146,21 @@ def refreshdb(rdict,key):
             c.execute(sql)
             conn.commit()
             print('新增 %s' % rdict[item]['supply'])
+
         elif num == 1:
-            #TODO：比较不同值 UPDATE
-            for index,(old,new) in enumerate(zip(datas,res[0])):
+            nid = res[0][0]  #待更新项对应id
+            #按供货商查询 遍历各项数据 有不同则更新
+            for index,(new,old) in enumerate(zip(datas,res[0])):
                 if old != new and index!=0:
                     item = items[index]
-                    sql = "UPDATE icnet SET %s = '%s' WHERE id = %s" % (item,new,nid)
-                    c.execute(sql)
+                    try:
+                        sql = "UPDATE icnet SET '%s' = '%s' WHERE id = %d" % (item,new,nid)
+                        c.execute(sql)
+                    except:
+                        sql = "UPDATE icnet SET '%s' = '%s' WHERE id = %d" % (item, new, nid)
+                        c.execute(sql)
                     conn.commit()
-                    print('更新 %s' % rdict[item]['supply'])
+                    print('更新 %s : %s %s -> %s' % (res[0][1],item,old,new))
         else:
             pass
 
